@@ -9,10 +9,12 @@ class Settings(BaseSettings):
     # JWT
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days; there is no refresh-token flow
     QR_TOKEN_EXPIRE_MINUTES: int = 15
     
-    # CORS
+    # CORS. Set ALLOWED_ORIGINS in the environment to serve the app from a LAN
+    # address; localStorage and CORS are both per-origin, so a host that is not
+    # listed here cannot sign in.
     ALLOWED_ORIGINS: list = [
         "http://localhost:3000",
         "http://localhost:8000",

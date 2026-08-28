@@ -138,6 +138,16 @@ The default campus email domain is `college.edu`.
 4. Optionally choose up to 3 image files or drag them into the upload area.
 5. Select **Report Lost Item**.
 
+### Report a found item
+
+1. Sign in first.
+2. Open http://localhost:3000/report/found.
+3. Enter the item title, description, category, campus zone, and date.
+4. Optionally choose up to 3 image files or drag them into the upload area.
+5. Select **Report Found Item**.
+
+Marking an item as high value hides its photos from everyone except you until a claim is verified.
+
 ### Browse items
 
 Open http://localhost:3000/feed to browse and filter reported items.
@@ -296,13 +306,13 @@ Docker Compose is the recommended setup. For frontend-only work, you can also ru
 
 ```cmd
 cd frontend
-npm install --legacy-peer-deps
+npm install
 npm run dev
 ```
 
 Then open http://localhost:3000.
 
-The backend and database must still be running for login, registration, feeds, and reports to work. The frontend uses the `/api` path and its Next.js proxy configuration to reach the backend service in Docker.
+The backend and database must still be running for login, registration, feeds, and reports to work. The frontend calls the backend directly at the URL in `NEXT_PUBLIC_API_URL` (`http://localhost:8000/api` by default), so that origin must be listed in the backend's `ALLOWED_ORIGINS`. Serving the app from a different host, such as a LAN address, requires adding that origin to `ALLOWED_ORIGINS` as well.
 
 ## 10. Project structure
 
@@ -330,10 +340,18 @@ cd frontend
 npm run build
 ```
 
-Backend tests, if present:
+Frontend lint:
+
+```cmd
+cd frontend
+npm run lint
+```
+
+Backend tests. These run against a temporary SQLite database, so no Postgres or Docker is needed:
 
 ```cmd
 cd backend
+pip install -r requirements.txt
 pytest tests/
 ```
 

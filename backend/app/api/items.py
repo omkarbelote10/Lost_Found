@@ -4,13 +4,14 @@ from typing import List, Optional
 import os
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from app.core.database import get_db
 from app.core.config import get_settings
 from app.models.item import Item, ItemType, ItemCategory, ItemStatus
 from app.schemas.item import ItemCreate, ItemResponse, ItemListResponse
 from app.utils.validators import validate_file_extension, extract_ocr_tokens
-from app.core.security import get_current_user_id
+from app.core.security import get_current_user_id, get_optional_user_id
 
 router = APIRouter()
 settings = get_settings()
@@ -31,10 +32,7 @@ async def report_item(
     db: Session = Depends(get_db)
 ):
     """Report a lost or found item with up to 3 images"""
-    
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     # Validate input
     if type not in [e.value for e in ItemType]:
         raise HTTPException(status_code=400, detail=f"Invalid type: {type}")
@@ -44,30 +42,40 @@ async def report_item(
     
     # Process images
     image_urls = []
-    if images and len(images) <= 3:
+    # Browsers send an empty part for an empty file input; ignore those
+    files = [img for img in (images or []) if img and img.filename]
+    if files:
+        if len(files) > 3:
+            raise HTTPException(status_code=400, detail="A maximum of 3 images is allowed")
+
         upload_dir = Path(settings.UPLOAD_DIR)
         upload_dir.mkdir(parents=True, exist_ok=True)
-        
-        for i, image in enumerate(images):
+
+        for image in files:
             if not validate_file_extension(image.filename):
                 raise HTTPException(status_code=400, detail=f"Invalid file type: {image.filename}")
-            
-            # Save file
-            timestamp = datetime.utcnow().timestamp()
-            filename = f"{user_id}_{timestamp}_{i}_{image.filename}"
-            filepath = upload_dir / filename
-            
+
             content = await image.read()
-            with open(filepath, "wb") as f:
+            if len(content) > settings.MAX_UPLOAD_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"{image.filename} exceeds the {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB limit",
+                )
+
+            # Never build a path from the client-supplied filename
+            ext = image.filename.rsplit(".", 1)[1].lower()
+            filename = f"{user_id}_{uuid4().hex}.{ext}"
+
+            with open(upload_dir / filename, "wb") as f:
                 f.write(content)
-            
+
             image_urls.append(f"/uploads/{filename}")
-    
+
     # Parse incident time
     try:
         incident_dt = datetime.fromisoformat(incident_time)
-    except:
-        incident_dt = datetime.utcnow()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid incident_time: {incident_time}")
     
     # Extract OCR tokens from description
     ocr_tokens = extract_ocr_tokens(description)
@@ -101,7 +109,7 @@ async def get_feed(
     category: Optional[str] = None,
     campus_zone: Optional[str] = None,
     type: Optional[str] = None,
-    current_user_id: int = None,
+    current_user_id: Optional[int] = Depends(get_optional_user_id),
     db: Session = Depends(get_db)
 ):
     """Get paginated feed of open items with masking for sensitive items"""
@@ -118,25 +126,34 @@ async def get_feed(
     
     items = query.order_by(Item.created_at.desc()).offset(skip).limit(limit).all()
     
-    # Mask high-value items for non-owners
+    # Mask high-value items for non-owners. Mask the response object, never the
+    # ORM row, or a later flush would erase the URLs from the database.
     results = []
     for item in items:
+        data = ItemListResponse.from_orm(item)
         if item.is_high_value and item.user_id != current_user_id:
-            # Mask image URLs for sensitive items
-            item.image_urls = []
-        results.append(ItemListResponse.from_orm(item))
-    
+            data.image_urls = []
+        results.append(data)
+
     return results
 
 @router.get("/{item_id}", response_model=ItemResponse)
-async def get_item(item_id: int, db: Session = Depends(get_db)):
+async def get_item(
+    item_id: int,
+    current_user_id: Optional[int] = Depends(get_optional_user_id),
+    db: Session = Depends(get_db)
+):
     """Get single item details"""
-    
+
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    
-    return ItemResponse.from_orm(item)
+
+    data = ItemResponse.from_orm(item)
+    # Same masking as the feed, or this endpoint becomes a way around it
+    if item.is_high_value and item.user_id != current_user_id:
+        data.image_urls = []
+    return data
 
 @router.get("/", response_model=List[ItemResponse])
 async def get_user_items(
@@ -144,9 +161,6 @@ async def get_user_items(
     db: Session = Depends(get_db)
 ):
     """Get user's items"""
-    
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     items = db.query(Item).filter(Item.user_id == user_id).all()
     return [ItemResponse.from_orm(item) for item in items]

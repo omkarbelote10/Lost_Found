@@ -5,7 +5,7 @@ from typing import Optional
 import re
 
 from app.core.database import get_db
-from app.core.security import hash_password, create_access_token, verify_password
+from app.core.security import hash_password, create_access_token, verify_password, get_current_user_id
 from app.core.config import get_settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, TokenResponse, UserResponse
@@ -84,17 +84,10 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
-    current_user_id: int = None,
+    current_user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Get current user profile"""
-    # In production, extract user ID from JWT token
-    if not current_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
-    
     user = db.query(User).filter(User.id == current_user_id).first()
     if not user:
         raise HTTPException(

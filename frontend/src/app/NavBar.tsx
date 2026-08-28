@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/hooks/useStore"
+import { isTokenValid } from "@/services/api"
 
 export default function NavBar() {
   const router = useRouter()
@@ -13,8 +14,17 @@ export default function NavBar() {
   useEffect(() => {
     const storedUser = localStorage.getItem("user")
     const token = localStorage.getItem("token")
-    if (storedUser && token) {
-      useAuthStore.setState({ user: JSON.parse(storedUser), token, isAuthenticated: true })
+    if (storedUser && isTokenValid(token)) {
+      try {
+        useAuthStore.setState({ user: JSON.parse(storedUser), token, isAuthenticated: true })
+      } catch {
+        localStorage.removeItem("user")
+      }
+    } else if (storedUser || token) {
+      // Expired or half-written session: clear it so the UI never shows a
+      // signed-in state backed by a token the API will reject.
+      localStorage.removeItem("token")
+      localStorage.removeItem("user")
     }
     setReady(true)
   }, [])

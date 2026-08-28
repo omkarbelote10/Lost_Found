@@ -5,23 +5,28 @@ from typing import List
 from app.core.database import get_db
 from app.models.item import Item, ItemType, ItemStatus
 from app.models.match import Match, MatchStatus, Claim
-from app.schemas.match import MatchResponse, ClaimCreate, ClaimResponse, QRHandshakeResponse
+from app.schemas.match import MatchResponse, ClaimCreate, ClaimResponse, QRHandshakeResponse, FindMatchesRequest
 from app.services.scoring import ScoringEngine
-from app.core.security import create_qr_token
+from app.core.security import create_qr_token, get_current_user_id
 
 router = APIRouter()
 
 @router.post("/find")
 async def find_matches(
-    lost_item_id: int,
+    request: FindMatchesRequest,
+    user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
     """Find matching items for a lost item"""
-    
+
+    lost_item_id = request.lost_item_id
     lost_item = db.query(Item).filter(Item.id == lost_item_id).first()
     if not lost_item or lost_item.type != ItemType.LOST:
         raise HTTPException(status_code=404, detail="Lost item not found")
-    
+
+    if lost_item.user_id != user_id:
+        raise HTTPException(status_code=403, detail="You can only find matches for your own items")
+
     # Get all found items of same category
     found_items = db.query(Item).filter(
         Item.type == ItemType.FOUND,
@@ -99,7 +104,11 @@ async def find_matches(
     }
 
 @router.get("/{match_id}", response_model=MatchResponse)
-async def get_match(match_id: int, db: Session = Depends(get_db)):
+async def get_match(
+    match_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
     """Get match details"""
     
     match = db.query(Match).filter(Match.id == match_id).first()
@@ -109,9 +118,19 @@ async def get_match(match_id: int, db: Session = Depends(get_db)):
     return MatchResponse.from_orm(match)
 
 @router.get("/item/{item_id}", response_model=List[MatchResponse])
-async def get_item_matches(item_id: int, db: Session = Depends(get_db)):
+async def get_item_matches(
+    item_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
     """Get all matches for an item"""
-    
+
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    if item.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not your item")
+
     matches = db.query(Match).filter(
         (Match.lost_item_id == item_id) | (Match.found_item_id == item_id)
     ).all()

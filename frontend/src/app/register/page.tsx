@@ -29,7 +29,8 @@ export default function RegisterPage() {
     try {
       const response = await authService.register(email, password, fullName)
       login(response.data.user, response.data.access_token)
-      router.push("/dashboard")
+      const redirect = new URLSearchParams(window.location.search).get("redirect")
+      router.push(redirect && redirect.startsWith("/") ? redirect : "/dashboard")
     } catch (err: any) {
       setError(err.response?.data?.detail || "Registration failed. Please try again.")
     } finally {

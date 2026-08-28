@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { itemService } from "@/services/api"
+import { itemService, resolveMediaUrl } from "@/services/api"
 
 interface Item {
   id: number
@@ -124,7 +124,7 @@ export default function FeedPage() {
                   </div>
                 ) : item.image_urls.length > 0 ? (
                   <img
-                    src={item.image_urls[0]}
+                    src={resolveMediaUrl(item.image_urls[0])}
                     alt={item.title}
                     className="w-full h-full object-cover"
                   />

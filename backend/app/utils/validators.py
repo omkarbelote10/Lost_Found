@@ -28,7 +28,7 @@ def parse_campus_zone(zone_name: str) -> str:
 
 def validate_file_extension(filename: str, allowed_extensions: list = None) -> bool:
     if allowed_extensions is None:
-        allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf']
+        allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf']
     
     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
     return ext in allowed_extensions

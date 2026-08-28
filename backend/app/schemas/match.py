@@ -19,10 +19,23 @@ class MatchResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class FindMatchesRequest(BaseModel):
+    lost_item_id: int
+
 class ClaimCreate(BaseModel):
     match_id: int
     challenge_question: str
     claimant_answer: str
+
+class ChallengeRespondRequest(BaseModel):
+    claim_id: int
+    answer: str
+
+class ChallengeApproveRequest(BaseModel):
+    claim_id: int
+
+class HandshakeVerifyRequest(BaseModel):
+    qr_token: str
 
 class ClaimResponse(BaseModel):
     id: int

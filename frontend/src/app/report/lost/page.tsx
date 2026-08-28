@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { itemService } from "@/services/api"
+import { itemService, isTokenValid } from "@/services/api"
+
+// Must match the backend's allowed upload extensions (see utils/validators.py)
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+// datetime-local expects local wall-clock time; toISOString() would give UTC
+const toLocalDateTimeInput = (date: Date) =>
+  new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
 export default function ReportLostPage() {
   const router = useRouter()
@@ -11,7 +19,7 @@ export default function ReportLostPage() {
     description: "",
     category: "ELECTRONICS",
     campus_zone: "Library Zone",
-    incident_time: new Date().toISOString().slice(0, 16),
+    incident_time: "",
     is_high_value: false,
   })
   const [images, setImages] = useState<File[]>([])
@@ -21,8 +29,6 @@ export default function ReportLostPage() {
   const [dragActive, setDragActive] = useState(false)
   const [previews, setPreviews] = useState<string[]>([])
 
-  const hasToken = () => Boolean(localStorage.getItem("token"))
-
   useEffect(() => {
     const nextPreviews = images.map((image) => URL.createObjectURL(image))
     setPreviews(nextPreviews)
@@ -30,9 +36,15 @@ export default function ReportLostPage() {
   }, [images])
 
   useEffect(() => {
-    if (!localStorage.getItem("token")) {
+    if (!isTokenValid()) {
       router.replace("/login?redirect=/report/lost")
+      return
     }
+    // Default the incident time on the client only, so server and client markup match
+    setFormData((current) => ({
+      ...current,
+      incident_time: current.incident_time || toLocalDateTimeInput(new Date()),
+    }))
   }, [router])
 
   const handleChange = (
@@ -49,7 +61,18 @@ export default function ReportLostPage() {
   }
 
   const addImages = (selectedFiles: File[]) => {
-    const validFiles = selectedFiles.filter((file) => file.type.startsWith("image/"))
+    const wrongType = selectedFiles.filter((file) => !ACCEPTED_IMAGE_TYPES.includes(file.type))
+    const tooLarge = selectedFiles.filter(
+      (file) => ACCEPTED_IMAGE_TYPES.includes(file.type) && file.size > MAX_IMAGE_BYTES,
+    )
+    if (wrongType.length) {
+      setError("Only JPG, PNG, GIF or WEBP images are supported.")
+    } else if (tooLarge.length) {
+      setError("Images must be 10MB or smaller.")
+    }
+    const validFiles = selectedFiles.filter(
+      (file) => ACCEPTED_IMAGE_TYPES.includes(file.type) && file.size <= MAX_IMAGE_BYTES,
+    )
     setImages((current) => [...current, ...validFiles].slice(0, 3))
   }
 
@@ -68,7 +91,7 @@ export default function ReportLostPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!hasToken()) {
+    if (!isTokenValid()) {
       router.push("/login?redirect=/report/lost")
       return
     }
@@ -92,12 +115,14 @@ export default function ReportLostPage() {
     } catch (err: any) {
       const detail = err.response?.data?.detail
       if (err.response?.status === 401) {
-        localStorage.removeItem("token")
-        localStorage.removeItem("user")
-        router.replace("/login?redirect=/report/lost")
+        // The response interceptor already cleared the session and is redirecting
         return
       }
-      setError(Array.isArray(detail) ? detail.map((item: any) => item.msg).join(" ") : detail || "Failed to report item")
+      setError(
+        Array.isArray(detail)
+          ? detail.map((item: any) => `${item.loc?.slice(-1)[0] ?? "field"}: ${item.msg}`).join("; ")
+          : detail || "Failed to report item",
+      )
     } finally {
       setLoading(false)
     }
@@ -183,6 +208,7 @@ export default function ReportLostPage() {
             name="incident_time"
             value={formData.incident_time}
             onChange={handleChange}
+            required
             className="w-full border rounded px-3 py-2"
           />
         </div>
