@@ -27,7 +27,10 @@ async def report_item(
     is_high_value: bool = Form(False),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
-    images: Optional[List[UploadFile]] = File(None),
+    # NOTE: must be a bare List, not Optional[List[...]]. With a Union annotation
+    # FastAPI uses form.get() instead of form.getlist(), so sending a single file
+    # yields one UploadFile where a list is expected and the request 422s.
+    images: List[UploadFile] = File(default=[]),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
