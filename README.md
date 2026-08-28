@@ -1,123 +1,365 @@
 # Campus Lost & Found
 
-This is the complete implementation of the Campus Lost-and-Found Intelligence System (CLFIS).
+Campus Lost & Found is a web application for reporting, finding, matching, and securely returning lost items on a university campus.
 
-## Quick Start
+The project contains:
 
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 16 (via Docker)
+- A Next.js frontend
+- A FastAPI backend
+- PostgreSQL with PostGIS and pgvector
+- An ML and evaluation workspace
 
-### Setup with Docker Compose
+## 1. Prerequisites
 
-```bash
-docker-compose up -d
+The easiest way to run the complete project is with Docker. Install these tools before continuing:
+
+- Git: https://git-scm.com/downloads
+- Docker Desktop: https://www.docker.com/products/docker-desktop/
+
+You do not need to install PostgreSQL, Python, or Node.js separately when using Docker Compose.
+
+### Windows requirements
+
+- Windows 10 or Windows 11
+- Docker Desktop configured to use the Linux engine
+- Internet access for the first image build
+- At least 8 GB of available RAM recommended
+- At least 10 GB of free disk space recommended
+
+After installing Docker Desktop, open it and wait until the status says **Engine running**.
+
+## 2. Clone the repository
+
+Open **Command Prompt** or **PowerShell** and run:
+
+```cmd
+git clone <repository-url>
+cd <repository-folder>
 ```
 
-This will start:
-- PostgreSQL database (port 5432)
-- Backend FastAPI server (port 8000)
-- Frontend Next.js application (port 3000)
+Replace `<repository-url>` with the URL of this repository. For example:
 
-### Manual Setup
-
-#### Database
-```bash
-docker run --name clfis-pg -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=clfis_db -p 5432:5432 -d postgis/postgis:16-3.4
+```cmd
+git clone https://github.com/your-account/your-repository.git
+cd your-repository
 ```
 
-#### Backend
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+The folder containing this README must also contain:
+
+```text
+docker-compose.yml
+backend\
+database\
+frontend\
+ml\
 ```
 
-#### Frontend
-```bash
+## 3. Start the project
+
+From the repository root, run:
+
+```cmd
+docker compose up -d --build
+```
+
+The first build can take several minutes because Docker downloads the Python and Node.js dependencies and builds the database image.
+
+The command starts three services:
+
+| Service | URL or port | Purpose |
+| --- | --- | --- |
+| Frontend | http://localhost:3000 | Next.js web application |
+| Backend | http://localhost:8000 | FastAPI API |
+| API docs | http://localhost:8000/docs | Swagger API documentation |
+| PostgreSQL | localhost:5432 | Application database |
+
+The database image includes both PostGIS and pgvector, which are required by the schema.
+
+## 4. Check that the project is running
+
+Run:
+
+```cmd
+docker compose ps
+```
+
+You should see these services running:
+
+```text
+postgres
+backend
+frontend
+```
+
+The PostgreSQL service should show `healthy`.
+
+You can also test the backend health endpoint:
+
+```cmd
+curl http://localhost:8000/health
+```
+
+Expected response:
+
+```json
+{"status":"healthy"}
+```
+
+Open the frontend in a browser:
+
+```text
+http://localhost:3000
+```
+
+## 5. Use the application
+
+### Create an account
+
+1. Open http://localhost:3000/register.
+2. Enter your full name.
+3. Enter an email ending with `@college.edu`.
+4. Enter a password with at least 8 characters.
+5. Confirm the password.
+6. Select **Create account**.
+
+The default campus email domain is `college.edu`.
+
+### Sign in
+
+1. Open http://localhost:3000/login.
+2. Enter the registered campus email and password.
+3. Select **Sign in**.
+
+### Report a lost item
+
+1. Sign in first.
+2. Open http://localhost:3000/report/lost.
+3. Enter the item title, description, category, campus zone, and date.
+4. Optionally choose up to 3 image files or drag them into the upload area.
+5. Select **Report Lost Item**.
+
+### Browse items
+
+Open http://localhost:3000/feed to browse and filter reported items.
+
+## 6. Useful Docker commands
+
+Run the project in the background:
+
+```cmd
+docker compose up -d
+```
+
+View service status:
+
+```cmd
+docker compose ps
+```
+
+View all logs:
+
+```cmd
+docker compose logs
+```
+
+View logs for one service:
+
+```cmd
+docker compose logs backend
+docker compose logs frontend
+docker compose logs postgres
+```
+
+Follow logs live:
+
+```cmd
+docker compose logs -f backend
+```
+
+Stop the services without deleting database data:
+
+```cmd
+docker compose stop
+```
+
+Start previously stopped services:
+
+```cmd
+docker compose start
+```
+
+Stop and remove the containers and network:
+
+```cmd
+docker compose down
+```
+
+Rebuild after changing dependencies or Dockerfiles:
+
+```cmd
+docker compose up -d --build
+```
+
+## 7. Updating the project
+
+Before updating, stop or leave the project running as needed. From the repository root:
+
+```cmd
+git pull
+docker compose up -d --build
+```
+
+Do not delete the Docker volume unless you intentionally want to delete the local database.
+
+## 8. Troubleshooting
+
+### Docker command is not recognized
+
+Install Docker Desktop, restart Command Prompt or PowerShell, and verify:
+
+```cmd
+docker --version
+docker compose version
+```
+
+### Docker engine is not running
+
+Open Docker Desktop and wait for **Engine running**, then retry:
+
+```cmd
+docker compose up -d --build
+```
+
+### Frontend does not open on port 3000
+
+Check the frontend logs:
+
+```cmd
+docker compose logs frontend
+```
+
+If another application uses port 3000, stop that application or change the frontend port mapping in `docker-compose.yml`.
+
+### Backend does not start
+
+Check the backend logs:
+
+```cmd
+docker compose logs backend
+```
+
+The backend waits for PostgreSQL to become healthy before starting.
+
+### Database initialization fails
+
+Check the PostgreSQL logs:
+
+```cmd
+docker compose logs postgres
+```
+
+If this is a new local installation and you do not need existing local data, recreate the database volume:
+
+```cmd
+docker compose down
+
+docker volume rm lost_found_postgres_data
+
+docker compose up -d --build
+```
+
+Warning: removing the volume permanently deletes the local PostgreSQL data.
+
+### Registration or reporting returns 401
+
+Sign in again at:
+
+```text
+http://localhost:3000/login
+```
+
+Then return to the report page. The application requires a valid login token for protected actions.
+
+### Registration returns a campus email error
+
+Use an email ending in:
+
+```text
+@college.edu
+```
+
+The allowed domain is configured by `CAMPUS_EMAIL_DOMAIN` in `docker-compose.yml`.
+
+## 9. Optional manual development setup
+
+Docker Compose is the recommended setup. For frontend-only work, you can also run the Next.js development server locally:
+
+```cmd
 cd frontend
-npm install
+npm install --legacy-peer-deps
 npm run dev
 ```
 
-## Project Structure
+Then open http://localhost:3000.
 
-- **database/**: PostgreSQL schema with pgvector & PostGIS
-- **backend/**: FastAPI application with ML services
-- **frontend/**: Next.js 14 app with React & Tailwind
-- **ml/**: ML evaluation suite and model integration
-- **scripts/**: Setup and utility scripts
+The backend and database must still be running for login, registration, feeds, and reports to work. The frontend uses the `/api` path and its Next.js proxy configuration to reach the backend service in Docker.
 
-## Features
+## 10. Project structure
 
-✅ Multimodal item matching (SigLIP embeddings)
-✅ Spatiotemporal scoring with decay functions
-✅ Zero-Knowledge claim verification
-✅ Cryptographic QR handshake system
-✅ Campus zone awareness (PostGIS)
-✅ OCR token extraction & matching
-✅ Karma score system
-✅ Admin vault management
-✅ ML metrics evaluation (MRR, NDCG, Recall@K)
-
-## API Documentation
-
-Visit `http://localhost:8000/docs` for interactive API docs (Swagger UI)
-
-## Environment Variables
-
-Create `.env` file:
-```
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/clfis_db
-SECRET_KEY=your-secret-key
-CAMPUS_EMAIL_DOMAIN=college.edu
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+```text
+backend/       FastAPI application, models, schemas, and services
+database/      PostgreSQL schema and pgvector database Dockerfile
+frontend/      Next.js application and frontend API client
+ml/            Embeddings, retrieval, ranking, and evaluation code
+docker-compose.yml
 ```
 
-## Architecture
+## 11. Testing and checks
 
-### Frontend
-- Next.js 14 (App Router)
-- TypeScript
-- Tailwind CSS
-- Zustand for state management
-- Axios for API calls
+Frontend type check:
 
-### Backend
-- FastAPI
-- SQLAlchemy ORM
-- PostgreSQL with pgvector & PostGIS
-- Pydantic validation
-- JWT authentication
+```cmd
+cd frontend
+npm run type-check
+```
 
-### ML Pipeline
-- Hugging Face SigLIP model
-- Tesseract OCR
-- Vector embeddings (768-d)
-- Scikit-learn metrics
+Frontend production build:
 
-## Testing
+```cmd
+cd frontend
+npm run build
+```
 
-### Backend Tests
-```bash
+Backend tests, if present:
+
+```cmd
 cd backend
 pytest tests/
 ```
 
-### ML Benchmarks
-```bash
+ML evaluation:
+
+```cmd
 python ml/src/evaluation/run_eval.py
 ```
 
-## Contributing
+## 12. Stopping and restarting the project
 
-See `CONTRIBUTING.md` for guidelines
+To stop the project:
 
-## License
+```cmd
+docker compose down
+```
 
-MIT
+To start it again later:
+
+```cmd
+cd /d "path\to\your\repository"
+docker compose up -d
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
